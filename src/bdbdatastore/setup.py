@@ -9,8 +9,6 @@ setup(
     version='0.2.2',
     author="Nick Johnson",
     author_email="arachnid at notdot dot net",
-    maintainer="Tobias Rodaebel",
-    maintainer_email="tobias dor rodaebel ar googlemail dot com",
     description="An alternate datastore backend for App Engine, implemented "
                 "using BDB JE.",
     long_description="bdbdatastore is an alternate datastore backend for App "
