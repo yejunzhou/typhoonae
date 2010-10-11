@@ -6,6 +6,7 @@ syntax: glob
 .installed.cfg
 etc/*-nginx.conf
 etc/*-supervisor.conf
+etc/celeryconfig.py
 
 syntax: regexp
 
