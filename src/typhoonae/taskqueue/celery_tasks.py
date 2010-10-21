@@ -95,7 +95,7 @@ def create_task_queue(queue_name, rate_qps, bucket_size=5):
         bucket_size: Ignored, it's still not supported by celery.
     """
     task_class_name = get_task_class_name(queue_name)
-    if rate_qps == -1:
+    if rate_qps < 999999:
         rate_limit = "%d/h" % int(rate_qps * 3600)
     else:
         rate_limit = None

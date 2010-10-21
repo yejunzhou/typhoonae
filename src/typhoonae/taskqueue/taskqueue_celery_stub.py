@@ -90,9 +90,13 @@ class TaskQueueServiceStub(google.appengine.api.apiproxy_stub.APIProxyStub):
             response.set_chosen_task_name(
                 bulk_response.taskresult(0).chosen_task_name())
 
-    def _RunAsync(self, **kwargs):
-        queue_name = kwargs.get('queue', 'default')
-        task = self.celery_tasks_for_queues.get(queue_name)
+    def _GetCeleryTaskForQueue(self, queue_name):
+        if not queue_name:
+            queue_name = 'default'
+        return self.celery_tasks_for_queues.get(queue_name)
+
+    def _RunAsync(self, publisher=None, **kwargs):
+        task = self._GetCeleryTaskForQueue(kwargs.get('queue'))
         if task is None:
             raise google.appengine.runtime.apiproxy_errors.ApplicationError(
                 google.appengine.api.labs.taskqueue.taskqueue_service_pb.
@@ -104,7 +108,8 @@ class TaskQueueServiceStub(google.appengine.api.apiproxy_stub.APIProxyStub):
 
         task.apply_async(kwargs=kwargs,
                          eta=eta,
-                         expires=30 * 24 * 3600)
+                         expires=30 * 24 * 3600,
+                         publisher=publisher)
 
     def _Dynamic_BulkAdd(self, request, response):
         """Add many tasks to a queue using a single request.
@@ -126,29 +131,38 @@ class TaskQueueServiceStub(google.appengine.api.apiproxy_stub.APIProxyStub):
         if request.add_request(0).has_transaction():
             self._TransactionalBulkAdd(request)
 
-        for add_request in request.add_request_list():
-            if not request.add_request(0).has_transaction():
-                content_type = 'text/plain'
-                for h in add_request.header_list():
-                    if h.key() == 'content-type':
-                        content_type = h.value()
+        publishers = {}
+        try:
+            for add_request in request.add_request_list():
+                if not request.add_request(0).has_transaction():
+                    content_type = 'text/plain'
+                    for h in add_request.header_list():
+                        if h.key() == 'content-type':
+                            content_type = h.value()
 
-                task_dict = dict(
-                    content_type=content_type,
-                    eta=add_request.eta_usec()/1000000,
-                    host=self._internal_host,
-                    method=add_request.RequestMethod_Name(add_request.method()),
-                    name=add_request.task_name(),
-                    payload=base64.b64encode(add_request.body()),
-                    port=self._internal_port,
-                    queue=add_request.queue_name(),
-                    try_count=0,
-                    url=add_request.url(),
-                )
-
-                self._RunAsync(**task_dict)
-
-            task_result = response.add_taskresult()
+                    queue = add_request.queue_name()
+                    if queue not in publishers:
+                        task = self._GetCeleryTaskForQueue(queue)
+                        publishers[queue] = task.get_publisher()
+                    task_dict = dict(
+                        content_type=content_type,
+                        eta=add_request.eta_usec()/1000000,
+                        host=self._internal_host,
+                        method=add_request.RequestMethod_Name(
+                            add_request.method()),
+                        name=add_request.task_name(),
+                        payload=base64.b64encode(add_request.body()),
+                        port=self._internal_port,
+                        queue=queue,
+                        try_count=0,
+                        url=add_request.url(),
+                    )
+                    self._RunAsync(publishers[queue], **task_dict)
+                    task_result = response.add_taskresult()
+        finally:
+            for p in publishers.values():
+                p.close()
+                p.connection.close()
 
     def _TransactionalBulkAdd(self, request):
         """Uses datastore.AddActions to associate tasks with a transaction.
