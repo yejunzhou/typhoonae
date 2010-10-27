@@ -16,6 +16,7 @@
 """Console script to perform common tasks on configuring an application."""
 
 import google.appengine.api.croninfo
+from google.appengine.api.labs.taskqueue.taskqueue_stub import _ParseQueueYaml
 import google.appengine.cron
 import getpass
 import logging
@@ -401,6 +402,12 @@ CELERYD_LOG_LEVEL = "INFO"
 CELERYD_MAX_TASKS_PER_CHILD = 1000
 CELERYD_SOFT_TASK_TIME_LIMIT = %(soft_task_time_limit)s
 CELERYD_TASK_TIME_LIMIT = %(task_time_limit)s
+
+CELERY_QUEUES = %(celery_queues)s
+CELERY_DEFAULT_QUEUE = "default"
+CELERY_DEFAULT_EXCHANGE = "%(app_id)s"
+CELERY_DEFAULT_EXCHANGE_TYPE = "direct"
+CELERY_DEFAULT_ROUTING_KEY = "default"
 """
 
 
@@ -701,7 +708,7 @@ def write_ejabberd_conf(options):
     ejabberd_conf.close()
 
 
-def write_celery_conf(options):
+def write_celery_conf(options, conf, app_root):
     """Writes celery configuration file."""
 
     amqp_host = options.amqp_host
@@ -718,6 +725,15 @@ def write_celery_conf(options):
         soft_task_time_limit = 'None'
     var = options.var
 
+    queue_info = _ParseQueueYaml(None, app_root)
+    if queue_info and queue_info.queue:
+        queues = [entry.name for entry in queue_info.queue]
+    else:
+        queues = ["default"]
+
+    celery_queues = "{\n    %s\n}" % ',\n    '.join(
+        '"%s": { "binding_key": "%s" }' % (q, q) for q in queues)
+    app_id = conf.application
     celery_conf = open(options.celery, 'w')
     celery_conf.write(CELERY_CONFIG % locals())
     celery_conf.close()
@@ -1059,5 +1075,5 @@ def main():
     write_supervisor_conf(options, conf, app_root)
     write_ejabberd_conf(options)
     if options.use_celery:
-        write_celery_conf(options)
+        write_celery_conf(options, conf, app_root)
     write_crontab(options, app_root)

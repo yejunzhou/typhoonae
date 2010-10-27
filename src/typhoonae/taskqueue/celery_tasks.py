@@ -103,7 +103,7 @@ def create_task_queue(queue_name, rate_qps, bucket_size=5):
 
     # TODO: We ignore the bucket_size parameter
     return type(task_class_name, (Task,), dict(
-         queue=queue_name,
+         routing_key=queue_name,
          name=task_class_name,
          rate_limit=rate_limit,
          run=handle_task,
