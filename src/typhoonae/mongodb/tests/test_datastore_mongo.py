@@ -51,7 +51,7 @@ class TaskQueueServiceStubMock(apiproxy_stub.APIProxyStub):
 class DatastoreMongoTestCaseBase(unittest.TestCase):
     """Base class for testing the TyphoonAE Datastore MongoDB API proxy stub."""
 
-    def setUp(self):
+    def setUp(self, require_indexes=False):
         """Sets up test environment and regisers stub."""
 
         # Set required environment variables
@@ -77,7 +77,7 @@ class DatastoreMongoTestCaseBase(unittest.TestCase):
         apiproxy_stub_map.apiproxy = (apiproxy_stub_map.APIProxyStubMap())
 
         datastore = typhoonae.mongodb.datastore_mongo_stub.DatastoreMongoStub(
-            'test', '', require_indexes=False)
+            'test', '', require_indexes=require_indexes)
 
         try:
             apiproxy_stub_map.apiproxy.RegisterStub('datastore_v3', datastore)
@@ -520,7 +520,7 @@ class DatastoreMongoTestCase(DatastoreMongoTestCaseBase):
         query = Asset.all(keys_only=True)
 
         app_id = os.environ['APPLICATION_ID']
- 
+
         self.assertEqual(
             set([
                 datastore_types.Key.from_path(u'Asset', 1, _app=app_id),
@@ -904,15 +904,13 @@ class DatastoreMongoTestCase(DatastoreMongoTestCaseBase):
         """Retrieves a limited number of results."""
 
         class MyModel(db.Model):
-            data = db.StringProperty()
             number = db.IntegerProperty()
-            
+
 
         for i in range(100):
-            MyModel(data="Random data.", number=i).put()
+            MyModel(number=i).put()
 
         query = (MyModel.all()
-                    .filter('data =', "Random data.")
                     .filter('number >=', 10)
                     .filter('number <', 20)
                     .order('-number')
@@ -1014,7 +1012,7 @@ class DatastoreMongoTestCase(DatastoreMongoTestCaseBase):
         self.assertEqual(2700L, query.get().value)
 
         # Use a query with filters.
-        query = Number.all().filter('value >', 500).filter('value <=', 1000) 
+        query = Number.all().filter('value >', 500).filter('value <=', 1000)
         e = query.fetch(100)
         query.with_cursor(query.cursor())
         e = query.fetch(50)
@@ -1067,7 +1065,33 @@ class DatastoreMongoTestCase(DatastoreMongoTestCaseBase):
 
         from google.appengine.api.datastore_admin import (
             CreateIndex, UpdateIndex, DeleteIndex)
-
         self.assertEqual(1, CreateIndex(self.indices[0]))
         UpdateIndex(self.indices[0])
         DeleteIndex(self.indices[0])
+
+
+class DatastoreMongoRequireIndexesTestCase(DatastoreMongoTestCase):
+    """Testing the TyphoonAE Datastore MongoDB API proxy stub.
+
+    NOTE: This runs ALL THE TESTS in DatastoreMongoTestCase, except for the
+    ones that are special cased here.
+
+    The tests are run with the require_indexes flag set to True.
+    """
+
+    def setUp(self):
+        DatastoreMongoTestCaseBase.setUp(self, require_indexes=True)
+        from google.appengine.api.datastore_admin import (
+            CreateIndex, UpdateIndex, DeleteIndex)
+        for i in self.indices:
+            CreateIndex(i)
+
+    def tearDown(self):
+        from google.appengine.api.datastore_admin import (
+            CreateIndex, UpdateIndex, DeleteIndex)
+        for i in self.indices:
+            DeleteIndex(i)
+        DatastoreMongoTestCaseBase.tearDown(self)
+
+    def testIndices(self):
+        pass
