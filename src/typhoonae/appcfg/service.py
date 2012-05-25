@@ -202,6 +202,7 @@ class AppversionHandler(webapp.RequestHandler):
                     """
                     pool = {}
                     for srv in file(DEFAULT_SERVERS_FILE, 'r').readlines():
+                        srv = srv.strip()
                         rpc = urlfetch.create_rpc()
                         url = "http://%s%s?%s" % (
                             srv, self.request.path, self.request.query_string)
